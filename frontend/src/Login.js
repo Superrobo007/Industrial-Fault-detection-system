@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, User, Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
+const AUTH_BASE_URL = 'https://18.208.219.89/backend1/'
 const LoginPage = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({
     username: '',
@@ -21,7 +22,7 @@ const LoginPage = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/backend1/auth/login', {
+      const response = await fetch(`${AUTH_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json' 
