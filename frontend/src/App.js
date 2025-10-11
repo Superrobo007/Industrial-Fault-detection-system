@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 
 // Machine Configuration
+// Machine Configuration - Using proxy paths
 const MACHINES = {
   machine1: {
     id: 'machine1',
@@ -64,7 +65,7 @@ const MACHINES = {
   }
 };
 
-const AUTH_BASE_URL = 'https://52.205.204.241/backend1/auth/login';
+const AUTH_BASE_URL = '/api/backend1/auth/login';
 
 // RAG Chat Configuration
 const RAG_API_URL = 'https://ajyspmucyz.us-east-1.awsapprunner.com/';
