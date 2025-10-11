@@ -23,10 +23,9 @@ const LoginPage = ({ onLogin }) => {
     setError('');
 
     try {
-     const response = await fetch(`https://52.205.204.241/backend1/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+     const response = await fetch(`/api/auth/login`, {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' 
         },
         body: JSON.stringify({
           username: credentials.username,
