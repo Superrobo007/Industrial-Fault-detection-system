@@ -44,27 +44,27 @@ const MACHINES = {
   machine1: {
     id: 'machine1',
     name: 'Machine 1',
-    url: 'http://52.205.204.241/backend1/',
+    url: 'https://52.205.204.241/backend1/',
     color: 'blue',
     description: 'Production Line A'
   },
   machine2: {
     id: 'machine2',
     name: 'Machine 2',
-    url: 'http://52.205.204.241/backend2/',
+    url: 'https://52.205.204.241/backend2/',
     color: 'green',
     description: 'Production Line B'
   },
   machine3: {
     id: 'machine3',
     name: 'Machine 3',
-    url: 'http://52.205.204.241/backend3/',
+    url: 'https://52.205.204.241/backend3/',
     color: 'purple',
     description: 'Production Line C'
   }
 };
 
-const AUTH_BASE_URL = 'http://52.205.204.241/backend1/auth/login';
+const AUTH_BASE_URL = 'https://52.205.204.241/backend1/auth/login';
 
 // RAG Chat Configuration
 const RAG_API_URL = 'https://ajyspmucyz.us-east-1.awsapprunner.com/';
