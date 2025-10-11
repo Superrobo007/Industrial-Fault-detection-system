@@ -1,8 +1,8 @@
+import React, { useState, useRef, useEffect } from 'react';
 import './index.css';
 import DatabaseViewer from './DatabaseViewer';
 import mermaid from 'mermaid';
 import LoginPage from './Login';
-import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
   Upload, 
@@ -35,36 +35,40 @@ import {
   Save,
   Search,
   Filter,
-  Server
+  Server,
+  MessageCircle
 } from 'lucide-react';
 
-// Machine Configuration - MODIFY THESE URLs FOR YOUR DOCKER INSTANCES
+// Machine Configuration
 const MACHINES = {
   machine1: {
     id: 'machine1',
     name: 'Machine 1',
-    url: 'http://18.208.219.89/backend1/',
+    url: 'http://52.205.204.241/backend1/',
     color: 'blue',
     description: 'Production Line A'
   },
   machine2: {
     id: 'machine2',
     name: 'Machine 2',
-    url: 'http://18.208.219.89/backend2/',
+    url: 'http://52.205.204.241/backend2/',
     color: 'green',
     description: 'Production Line B'
   },
   machine3: {
     id: 'machine3',
     name: 'Machine 3',
-    url: 'http://18.208.219.89/backend3/',
+    url: 'http://52.205.204.241/backend3/',
     color: 'purple',
     description: 'Production Line C'
   }
 };
 
-// Authentication URL - Only backend on 8001 has auth configured
 const AUTH_BASE_URL = 'http://18.208.219.89/backend1/auth/login';
+
+// RAG Chat Configuration
+const RAG_API_URL = 'https://ajyspmucyz.us-east-1.awsapprunner.com/';
+const RAG_AUTH_TOKEN = 'Bearer 9fb2eed12d2b4def6242c0e16708fe60fa1d99fd7fa2c6323d1913cd4303b446';
 
 // Dynamic API utility functions
 const createApi = (baseUrl) => ({
@@ -207,7 +211,7 @@ const createApi = (baseUrl) => ({
   }
 });
 
-// Initialize mermaid globally
+// Initialize mermaid
 mermaid.initialize({ 
   startOnLoad: false,
   theme: 'dark',
@@ -222,7 +226,245 @@ mermaid.initialize({
   }
 });
 
-// Machine Selector Component
+// RAG Chat Widget Component
+const RAGChatWidget = ({ isOpen, onClose }) => {
+  const [documentUrl, setDocumentUrl] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      text: "Hello! I'm your RAG assistant. Please paste a document URL above, then ask me any questions about it. I specialize in legal, insurance, technical, and scientific documents.",
+      sender: 'assistant'
+    }
+  ]);
+  const [inputValue, setInputValue] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [documentStatus, setDocumentStatus] = useState({ text: '', type: '' });
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (isOpen) {
+      checkHealth();
+    }
+  }, [isOpen]);
+
+  const checkHealth = async () => {
+    try {
+      const response = await fetch(`${RAG_API_URL}/health`);
+      if (response.ok) {
+        console.log('✓ RAG Backend connected');
+      }
+    } catch (error) {
+      console.warn('⚠ RAG Backend not reachable');
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: '⚠ Warning: Cannot connect to RAG backend. Please ensure the server is running at ' + RAG_API_URL,
+        sender: 'assistant'
+      }]);
+    }
+  };
+
+  const handleDocumentUrlChange = (e) => {
+    const url = e.target.value.trim();
+    setDocumentUrl(url);
+
+    if (!url) {
+      setDocumentStatus({ text: '', type: '' });
+      return;
+    }
+
+    try {
+      new URL(url);
+      setDocumentStatus({ text: '✓ Document URL ready', type: 'success' });
+    } catch {
+      setDocumentStatus({ text: '✗ Invalid URL format', type: 'error' });
+    }
+  };
+
+  const isValidUrl = () => {
+    if (!documentUrl) return false;
+    try {
+      new URL(documentUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const question = inputValue.trim();
+
+    if (!question || !isValidUrl() || isProcessing) {
+      return;
+    }
+
+    const userMessage = {
+      id: Date.now(),
+      text: question,
+      sender: 'user'
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue('');
+
+    const typingMessage = {
+      id: Date.now() + 1,
+      text: '',
+      sender: 'assistant',
+      isTyping: true
+    };
+    setMessages(prev => [...prev, typingMessage]);
+
+    setIsProcessing(true);
+
+    try {
+      const response = await fetch(`${RAG_API_URL}/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': RAG_AUTH_TOKEN
+        },
+        body: JSON.stringify({
+          documents: documentUrl,
+          questions: [question]
+        })
+      });
+
+      setMessages(prev => prev.filter(msg => !msg.isTyping));
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const assistantMessage = {
+        id: Date.now() + 2,
+        text: data.answers && data.answers.length > 0 
+          ? data.answers[0] 
+          : "Sorry, I couldn't generate a response.",
+        sender: 'assistant'
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+    } catch (error) {
+      setMessages(prev => prev.filter(msg => !msg.isTyping));
+
+      const errorMessage = {
+        id: Date.now() + 3,
+        text: `Error: ${error.message}. Please check your document URL and try again.`,
+        sender: 'assistant'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      console.error('RAG API Error:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed bottom-24 right-8 w-96 h-[600px] bg-gray-900 border border-gray-700 rounded-3xl shadow-2xl flex flex-col overflow-hidden z-50 animate-slideIn">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-5 flex justify-between items-center flex-shrink-0">
+        <div>
+          <h3 className="text-lg font-semibold">RAG Assistant</h3>
+          <div className="text-xs opacity-90">Multi-Agent AI System</div>
+        </div>
+        <button 
+          className="text-white hover:opacity-70 transition-opacity p-1" 
+          onClick={onClose}
+        >
+          <X size={24} />
+        </button>
+      </div>
+
+      {/* Document section */}
+      <div className="p-4 bg-gray-800/50 border-b border-gray-700 flex-shrink-0">
+        <label className="block text-sm font-semibold text-gray-300 mb-2">Document URL</label>
+        <input
+          type="url"
+          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+          placeholder="https://example.com/document.pdf"
+          value={documentUrl}
+          onChange={handleDocumentUrlChange}
+        />
+        {documentStatus.text && (
+          <div className={`mt-2 text-xs ${documentStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+            {documentStatus.text}
+          </div>
+        )}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <div key={message.id} className={`flex gap-3 ${message.sender === 'user' ? 'flex-row-reverse' : ''}`}>
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 ${
+              message.sender === 'user' 
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600' 
+                : 'bg-gradient-to-r from-pink-500 to-red-500'
+            }`}>
+              {message.sender === 'user' ? 'You' : 'AI'}
+            </div>
+            <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm ${
+              message.sender === 'user'
+                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                : 'bg-gray-800 text-gray-200'
+            }`}>
+              {message.isTyping ? (
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              ) : (
+                message.text
+              )}
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="p-4 border-t border-gray-700 bg-gray-900 flex-shrink-0">
+        <div className="flex gap-3 items-center">
+          <input
+            type="text"
+            className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-full text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
+            placeholder="Ask a question..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={!isValidUrl() || isProcessing}
+          />
+          <button
+            className="w-11 h-11 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white hover:scale-110 transition-transform disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
+            onClick={handleSendMessage}
+            disabled={!isValidUrl() || !inputValue.trim() || isProcessing}
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Rest of the original components remain the same
 const MachineSelector = ({ selectedMachine, onSelectMachine, machineStatus }) => {
   const getColorClasses = (color, isSelected) => {
     const colors = {
@@ -628,6 +870,7 @@ const Dashboard = () => {
   const [isTraining, setIsTraining] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const [predictionData, setPredictionData] = useState({
     vibration: '',
@@ -644,21 +887,18 @@ const Dashboard = () => {
     description: ''
   });
 
-  // Handle login
   const handleLogin = (userData) => {
     setUser(userData);
     setIsAuthenticated(true);
     localStorage.setItem('user', JSON.stringify(userData));
   };
 
-  // Handle logout
   const handleLogout = () => {
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('user');
   };
 
-  // Check machine status
   const checkMachineStatus = async (machineId) => {
     try {
       const machineApi = createApi(MACHINES[machineId].url);
@@ -669,7 +909,6 @@ const Dashboard = () => {
     }
   };
 
-  // Check all machines status
   const checkAllMachines = async () => {
     const statuses = {};
     for (const machineId of Object.keys(MACHINES)) {
@@ -678,7 +917,6 @@ const Dashboard = () => {
     setMachineStatus(statuses);
   };
 
-  // Handle machine selection
   const handleSelectMachine = (machineId) => {
     setSelectedMachine(machineId);
     setApi(createApi(MACHINES[machineId].url));
@@ -686,7 +924,6 @@ const Dashboard = () => {
     loadData(createApi(MACHINES[machineId].url));
   };
 
-  // Load data
   const loadData = async (apiInstance = api) => {
     try {
       setIsLoading(true);
@@ -707,7 +944,6 @@ const Dashboard = () => {
     }
   };
 
-  // Initialize
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -721,7 +957,6 @@ const Dashboard = () => {
       checkAllMachines();
       loadData();
       
-      // Check machine status every 30 seconds
       const interval = setInterval(checkAllMachines, 30000);
       return () => clearInterval(interval);
     }
@@ -847,7 +1082,6 @@ const Dashboard = () => {
     setShowVisualization(true);
   };
 
-  // Clear messages after 5 seconds
   useEffect(() => {
     if (error || success) {
       const timer = setTimeout(() => {
@@ -1656,6 +1890,18 @@ const Dashboard = () => {
         isOpen={showVisualization}
         onClose={() => setShowVisualization(false)}
       />
+
+      {/* RAG Chat Button */}
+      <button
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-2xl hover:scale-110 transition-transform duration-300 flex items-center justify-center z-40"
+        title="Open RAG Assistant"
+      >
+        <MessageCircle className="text-white" size={28} />
+      </button>
+
+      {/* RAG Chat Widget */}
+      <RAGChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </div>
   );
 };
