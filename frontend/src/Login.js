@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, User, Lock, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
-const AUTH_BASE_URL = 'https://52.205.204.241/backend1/'
+const AUTH_BASE_URL = 'https://52.90.145.182/backend1';
 const LoginPage = ({ onLogin }) => {
   const [credentials, setCredentials] = useState({
     username: '',
